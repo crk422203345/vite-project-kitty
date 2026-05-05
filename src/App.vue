@@ -1,7 +1,420 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import { ref, onMounted, watch, computed } from 'vue'
+
+// Import default novel if it exists (using Vite's ?raw import)
+// Note: If the file is missing, this might need to be handled or removed.
+import defaultNovelText from './txt/我的模拟长生路.txt?raw'
+
+interface Chapter {
+  title: string
+  content: string
+}
+
+const chapters = ref<Chapter[]>([])
+const currentChapterIndex = ref(0)
+const bookName = ref('未命名小说')
+const fontSize = ref(18)
+const theme = ref('light')
+const isControlsVisible = ref(false)
+const isSidebarOpen = ref(false)
+const isLoading = ref(false)
+
+// Load settings from localStorage
+const loadSettings = () => {
+  const savedFontSize = localStorage.getItem('reader_font_size')
+  if (savedFontSize) fontSize.value = parseInt(savedFontSize)
+  
+  const savedTheme = localStorage.getItem('reader_theme')
+  if (savedTheme) {
+    theme.value = savedTheme
+    document.body.className = savedTheme
+  }
+}
+
+// Parse TXT content into chapters
+const parseTxt = (text: string) => {
+  isLoading.value = true
+  // Normalize line breaks
+  text = text.replace(/\r\n/g, '\n').replace(/\n\s*\n/g, '\n\n')
+  
+  // Chapter regex
+  const chapterRegex = /\n\s*(第[零一二三四五六七八九十百千万\d]+[章节回集部卷].*)\n/g
+  
+  const result: Chapter[] = []
+  let lastIndex = 0
+  let match
+
+  while ((match = chapterRegex.exec(text)) !== null) {
+    if (result.length === 0 && match.index > 0) {
+      result.push({
+        title: '前言',
+        content: text.substring(0, match.index).trim()
+      })
+    } else if (result.length > 0) {
+      result[result.length - 1].content = text.substring(lastIndex, match.index).trim()
+    }
+    
+    result.push({
+      title: match[1].trim(),
+      content: '' 
+    })
+    lastIndex = match.index + match[0].length
+  }
+
+  if (result.length > 0) {
+    result[result.length - 1].content = text.substring(lastIndex).trim()
+  } else {
+    result.push({ title: '正文', content: text.trim() })
+  }
+
+  chapters.value = result
+  isLoading.value = false
+}
+
+const handleFileUpload = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  bookName.value = file.name.replace('.txt', '')
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    parseTxt(text)
+    currentChapterIndex.value = 0
+    saveProgress()
+  }
+  reader.readAsText(file)
+}
+
+const saveProgress = () => {
+  localStorage.setItem(`progress_${bookName.value}`, currentChapterIndex.value.toString())
+}
+
+const loadProgress = () => {
+  const saved = localStorage.getItem(`progress_${bookName.value}`)
+  if (saved) currentChapterIndex.value = parseInt(saved)
+}
+
+const changeChapter = (index: number) => {
+  if (index >= 0 && index < chapters.value.length) {
+    currentChapterIndex.value = index
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    saveProgress()
+    isSidebarOpen.value = false
+  }
+}
+
+const setTheme = (newTheme: string) => {
+  theme.value = newTheme
+  document.body.className = newTheme
+  localStorage.setItem('reader_theme', newTheme)
+}
+
+const toggleFullScreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen()
+  } else {
+    document.exitFullscreen()
+  }
+}
+
+const readingProgressPercent = computed(() => {
+  if (chapters.value.length === 0) return 0
+  return Math.round(((currentChapterIndex.value + 1) / chapters.value.length) * 100)
+})
+
+onMounted(() => {
+  loadSettings()
+  if (defaultNovelText) {
+    bookName.value = '我的模拟长生路'
+    parseTxt(defaultNovelText)
+    loadProgress()
+  }
+})
+
+watch(fontSize, (newSize) => {
+  localStorage.setItem('reader_font_size', newSize.toString())
+})
 </script>
 
 <template>
-  <HelloWorld />
+  <div id="reader-app" @click="isControlsVisible = !isControlsVisible">
+    <!-- Top Bar -->
+    <header :class="['top-bar glass', { visible: isControlsVisible }]">
+      <div class="top-content">
+        <button class="btn" @click.stop="isSidebarOpen = true">☰ 目录</button>
+        <h1 class="book-title">{{ bookName }}</h1>
+        <label class="btn btn-primary">
+          导入 TXT
+          <input type="file" accept=".txt" @change="handleFileUpload" hidden>
+        </label>
+      </div>
+    </header>
+
+    <!-- Sidebar / Chapter List -->
+    <aside :class="['sidebar glass', { open: isSidebarOpen }]" @click.stop>
+      <div class="sidebar-header">
+        <h2>目录</h2>
+        <button class="btn" @click="isSidebarOpen = false">✕</button>
+      </div>
+      <div class="chapter-list">
+        <div 
+          v-for="(chapter, index) in chapters" 
+          :key="index"
+          :class="['chapter-item', { active: index === currentChapterIndex }]"
+          @click="changeChapter(index)"
+        >
+          {{ chapter.title }}
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="reader-container" :style="{ fontSize: fontSize + 'px' }">
+      <div v-if="chapters.length > 0" class="fade-in">
+        <h2 class="current-chapter-title">{{ chapters[currentChapterIndex].title }}</h2>
+        <div class="content-body">{{ chapters[currentChapterIndex].content }}</div>
+        
+        <div class="navigation-buttons">
+          <button class="btn" @click.stop="changeChapter(currentChapterIndex - 1)" :disabled="currentChapterIndex === 0">上一章</button>
+          <button class="btn" @click.stop="changeChapter(currentChapterIndex + 1)" :disabled="currentChapterIndex === chapters.length - 1">下一章</button>
+        </div>
+      </div>
+      <div v-else class="welcome-screen">
+        <h2>欢迎来到极简书阁</h2>
+        <p>请导入 TXT 小说开始阅读</p>
+      </div>
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer :class="['bottom-bar glass', { visible: isControlsVisible }]" @click.stop>
+      <div class="controls-grid">
+        <div class="control-item">
+          <span>字号</span>
+          <button class="btn" @click="fontSize -= 2">-</button>
+          <button class="btn" @click="fontSize += 2">+</button>
+        </div>
+        <div class="control-item">
+          <span>背景</span>
+          <div class="theme-dots">
+            <div class="theme-dot light" @click="setTheme('light')" :class="{ active: theme === 'light' }"></div>
+            <div class="theme-dot green" @click="setTheme('green')" :class="{ active: theme === 'green' }"></div>
+            <div class="theme-dot dark" @click="setTheme('dark')" :class="{ active: theme === 'dark' }"></div>
+          </div>
+        </div>
+        <div class="control-item">
+          <button class="btn" @click="toggleFullScreen">全屏阅读</button>
+        </div>
+      </div>
+      <div class="progress-info">
+        进度: {{ readingProgressPercent }}% ({{ currentChapterIndex + 1 }} / {{ chapters.length }})
+      </div>
+    </footer>
+
+    <!-- Overlay -->
+    <div v-if="isSidebarOpen" class="overlay" @click="isSidebarOpen = false"></div>
+  </div>
 </template>
+
+<style scoped>
+#reader-app {
+  min-height: 100vh;
+  position: relative;
+}
+
+.top-bar, .bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 15px 25px;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.top-bar {
+  top: 0;
+  transform: translateY(-100%);
+}
+
+.top-bar.visible {
+  transform: translateY(0);
+}
+
+.bottom-bar {
+  bottom: 0;
+  transform: translateY(100%);
+}
+
+.bottom-bar.visible {
+  transform: translateY(0);
+}
+
+.top-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.book-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  opacity: 0.8;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-container {
+  max-width: var(--reader-max-width);
+  margin: 0 auto;
+  padding: 100px 20px;
+  min-height: 100vh;
+}
+
+.current-chapter-title {
+  font-size: 1.8em;
+  margin-bottom: 40px;
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+  font-family: var(--font-serif);
+}
+
+.content-body {
+  white-space: pre-wrap;
+  line-height: var(--line-height);
+  font-family: var(--font-serif);
+  text-align: justify;
+}
+
+.navigation-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 60px;
+  padding-top: 30px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 320px;
+  z-index: 200;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-light);
+}
+
+body.dark .sidebar { background: var(--panel-dark); }
+body.green .sidebar { background: var(--panel-green); }
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapter-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.chapter-item {
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+  border-bottom: 1px solid hsla(0, 0%, 50%, 0.05);
+}
+
+.chapter-item:hover {
+  background: hsla(0, 0%, 50%, 0.1);
+}
+
+.chapter-item.active {
+  color: var(--primary);
+  background: hsla(210, 100%, 60%, 0.1);
+  font-weight: 600;
+}
+
+.controls-grid {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.theme-dots {
+  display: flex;
+  gap: 10px;
+}
+
+.theme-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s;
+}
+
+.theme-dot.active {
+  border-color: var(--primary);
+  transform: scale(1.1);
+}
+
+.theme-dot.light { background: #fff; border: 1px solid #ddd; }
+.theme-dot.green { background: #c7edcc; }
+.theme-dot.dark { background: #1a1a1a; }
+
+.progress-info {
+  text-align: center;
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 150;
+  backdrop-filter: blur(4px);
+}
+
+.welcome-screen {
+  height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  .sidebar { width: 85%; }
+  .book-title { display: none; }
+  .controls-grid { flex-direction: column; gap: 15px; }
+  .reader-container { padding-top: 60px; }
+}
+</style>
