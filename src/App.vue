@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 
-// Import default novel if it exists (using Vite's ?raw import)
-// Note: If the file is missing, this might need to be handled or removed.
-import defaultNovelText from './txt/我的模拟长生路.txt?raw'
-
 interface Chapter {
   title: string
   content: string
@@ -18,12 +14,13 @@ const theme = ref('light')
 const isControlsVisible = ref(false)
 const isSidebarOpen = ref(false)
 const isLoading = ref(false)
+const searchQuery = ref('')
 
 // Load settings from localStorage
 const loadSettings = () => {
   const savedFontSize = localStorage.getItem('reader_font_size')
   if (savedFontSize) fontSize.value = parseInt(savedFontSize)
-  
+
   const savedTheme = localStorage.getItem('reader_theme')
   if (savedTheme) {
     theme.value = savedTheme
@@ -35,34 +32,36 @@ const loadSettings = () => {
 const parseTxt = (text: string) => {
   isLoading.value = true
   // Normalize line breaks
-  text = text.replace(/\r\n/g, '\n').replace(/\n\s*\n/g, '\n\n')
-  
-  // Chapter regex
-  const chapterRegex = /\n\s*(第[零一二三四五六七八九十百千万\d]+[章节回集部卷].*)\n/g
-  
-  const result: Chapter[] = []
-  let lastIndex = 0
-  let match
+  text = text.replace(/\r\n/g, '\n')
 
-  while ((match = chapterRegex.exec(text)) !== null) {
-    if (result.length === 0 && match.index > 0) {
+  // Improved Chapter regex: handles Chinese chapter patterns, works at start of line
+  // Matches "第...章/节/回/..."
+  const chapterRegex = /^\s*(第[零一二三四五六七八九十百千万\d]+[章节回集部卷].*)$|(\n\s*第[零一二三四五六七八九十百千万\d]+[章节回集部卷].*)/gm
+
+  const result: Chapter[] = []
+  
+  // Find all chapter headers
+  const matches = [...text.matchAll(chapterRegex)]
+  
+  if (matches.length > 0) {
+    // Handle text before the first chapter
+    if (matches[0].index! > 0) {
       result.push({
         title: '前言',
-        content: text.substring(0, match.index).trim()
+        content: text.substring(0, matches[0].index).trim()
       })
-    } else if (result.length > 0) {
-      result[result.length - 1].content = text.substring(lastIndex, match.index).trim()
     }
-    
-    result.push({
-      title: match[1].trim(),
-      content: '' 
-    })
-    lastIndex = match.index + match[0].length
-  }
 
-  if (result.length > 0) {
-    result[result.length - 1].content = text.substring(lastIndex).trim()
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index!
+      const end = i < matches.length - 1 ? matches[i+1].index! : text.length
+      
+      const fullMatch = matches[i][0]
+      const title = fullMatch.trim()
+      const content = text.substring(start + fullMatch.length, end).trim()
+      
+      result.push({ title, content })
+    }
   } else {
     result.push({ title: '正文', content: text.trim() })
   }
@@ -70,6 +69,13 @@ const parseTxt = (text: string) => {
   chapters.value = result
   isLoading.value = false
 }
+
+const filteredChapters = computed(() => {
+  const all = chapters.value.map((c, index) => ({ ...c, originalIndex: index }))
+  if (!searchQuery.value) return all
+  const query = searchQuery.value.toLowerCase()
+  return all.filter(c => c.title.toLowerCase().includes(query))
+})
 
 const handleFileUpload = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
@@ -92,7 +98,12 @@ const saveProgress = () => {
 
 const loadProgress = () => {
   const saved = localStorage.getItem(`progress_${bookName.value}`)
-  if (saved) currentChapterIndex.value = parseInt(saved)
+  if (saved) {
+    const index = parseInt(saved)
+    if (index >= 0 && index < chapters.value.length) {
+      currentChapterIndex.value = index
+    }
+  }
 }
 
 const changeChapter = (index: number) => {
@@ -123,13 +134,28 @@ const readingProgressPercent = computed(() => {
   return Math.round(((currentChapterIndex.value + 1) / chapters.value.length) * 100)
 })
 
+const loadDefaultNovel = async () => {
+  try {
+    isLoading.value = true
+    const response = await fetch('/txt/novel.txt')
+    if (response.ok) {
+      const text = await response.text()
+      bookName.value = '我的模拟长生路'
+      parseTxt(text)
+      loadProgress()
+    } else {
+      console.error('Failed to load default novel')
+    }
+  } catch (error) {
+    console.error('Error loading default novel:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadSettings()
-  if (defaultNovelText) {
-    bookName.value = '我的模拟长生路'
-    parseTxt(defaultNovelText)
-    loadProgress()
-  }
+  loadDefaultNovel()
 })
 
 watch(fontSize, (newSize) => {
@@ -139,15 +165,33 @@ watch(fontSize, (newSize) => {
 
 <template>
   <div id="reader-app" @click="isControlsVisible = !isControlsVisible">
+    <!-- Side Navigation (PC Only) -->
+    <div class="side-nav left glass" :class="{ disabled: currentChapterIndex <= 0 }"
+      @click.stop="changeChapter(currentChapterIndex - 1)">
+      <span class="nav-icon">❮</span>
+    </div>
+    <div class="side-nav right glass"
+      :class="{ disabled: currentChapterIndex >= chapters.length - 1 || chapters.length === 0 }"
+      @click.stop="changeChapter(currentChapterIndex + 1)">
+      <span class="nav-icon">❯</span>
+    </div>
+
     <!-- Top Bar -->
     <header :class="['top-bar glass', { visible: isControlsVisible }]">
+      <div class="progress-bar-container">
+        <div class="progress-bar" :style="{ width: readingProgressPercent + '%' }"></div>
+      </div>
       <div class="top-content">
-        <button class="btn" @click.stop="isSidebarOpen = true">☰ 目录</button>
+        <button class="btn" @click.stop="isSidebarOpen = true">
+          <span class="icon">☰</span> 目录
+        </button>
         <h1 class="book-title">{{ bookName }}</h1>
-        <label class="btn btn-primary">
-          导入 TXT
-          <input type="file" accept=".txt" @change="handleFileUpload" hidden>
-        </label>
+        <div class="top-actions">
+          <label class="btn btn-primary">
+            导入 TXT
+            <input type="file" accept=".txt" @change="handleFileUpload" hidden>
+          </label>
+        </div>
       </div>
     </header>
 
@@ -157,27 +201,38 @@ watch(fontSize, (newSize) => {
         <h2>目录</h2>
         <button class="btn" @click="isSidebarOpen = false">✕</button>
       </div>
+      <div class="sidebar-search">
+        <input type="text" v-model="searchQuery" placeholder="搜索章节..." class="search-input">
+      </div>
       <div class="chapter-list">
-        <div 
-          v-for="(chapter, index) in chapters" 
-          :key="index"
-          :class="['chapter-item', { active: index === currentChapterIndex }]"
-          @click="changeChapter(index)"
-        >
+        <div v-for="chapter in filteredChapters" :key="chapter.originalIndex"
+          :class="['chapter-item', { active: chapter.originalIndex === currentChapterIndex }]" 
+          @click="changeChapter(chapter.originalIndex)">
           {{ chapter.title }}
+        </div>
+        <div v-if="filteredChapters.length === 0" class="no-results">
+          {{ isLoading ? '正在加载...' : '未找到相关章节' }}
         </div>
       </div>
     </aside>
 
     <!-- Main Content -->
     <main class="reader-container" :style="{ fontSize: fontSize + 'px' }">
-      <div v-if="chapters.length > 0" class="fade-in">
+      <!-- Loading State -->
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loader"></div>
+        <p>正在努力解析小说...</p>
+      </div>
+
+      <div v-else-if="chapters.length > 0" class="fade-in">
         <h2 class="current-chapter-title">{{ chapters[currentChapterIndex].title }}</h2>
         <div class="content-body">{{ chapters[currentChapterIndex].content }}</div>
-        
+
         <div class="navigation-buttons">
-          <button class="btn" @click.stop="changeChapter(currentChapterIndex - 1)" :disabled="currentChapterIndex === 0">上一章</button>
-          <button class="btn" @click.stop="changeChapter(currentChapterIndex + 1)" :disabled="currentChapterIndex === chapters.length - 1">下一章</button>
+          <button class="btn" @click.stop="changeChapter(currentChapterIndex - 1)"
+            :disabled="currentChapterIndex === 0">上一章</button>
+          <button class="btn" @click.stop="changeChapter(currentChapterIndex + 1)"
+            :disabled="currentChapterIndex === chapters.length - 1">下一章</button>
         </div>
       </div>
       <div v-else class="welcome-screen">
@@ -217,12 +272,73 @@ watch(fontSize, (newSize) => {
 </template>
 
 <style scoped>
+.side-nav {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.3s ease;
+  opacity: 0.2;
+  background: hsla(0, 0%, 50%, 0.05);
+  border: none;
+  backdrop-filter: blur(8px);
+}
+
+.side-nav.disabled {
+  opacity: 0.03 !important;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.side-nav:hover {
+  opacity: 0.8;
+  width: 90px;
+  background: hsla(0, 0%, 50%, 0.1);
+}
+
+.side-nav.left {
+  left: 0;
+  border-right: 1px solid var(--border);
+}
+
+.side-nav.right {
+  right: 0;
+  border-left: 1px solid var(--border);
+}
+
+.nav-icon {
+  font-size: 2.5rem;
+  opacity: 0.5;
+  transition: transform 0.3s ease;
+}
+
+.side-nav.left:hover .nav-icon {
+  transform: translateX(-5px);
+}
+
+.side-nav.right:hover .nav-icon {
+  transform: translateX(5px);
+}
+
+/* Only show on PC */
+@media (max-width: 800px) {
+  .side-nav {
+    display: none;
+  }
+}
+
 #reader-app {
   min-height: 100vh;
   position: relative;
 }
 
-.top-bar, .bottom-bar {
+.top-bar,
+.bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
@@ -274,6 +390,32 @@ watch(fontSize, (newSize) => {
   min-height: 100vh;
 }
 
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: 20px;
+  color: var(--primary);
+}
+
+.loader {
+  width: 48px;
+  height: 48px;
+  border: 5px solid var(--primary);
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .current-chapter-title {
   font-size: 1.8em;
   margin-bottom: 40px;
@@ -312,8 +454,13 @@ watch(fontSize, (newSize) => {
   background: var(--panel-light);
 }
 
-body.dark .sidebar { background: var(--panel-dark); }
-body.green .sidebar { background: var(--panel-green); }
+body.dark .sidebar {
+  background: var(--panel-dark);
+}
+
+body.green .sidebar {
+  background: var(--panel-green);
+}
 
 .sidebar.open {
   transform: translateX(0);
@@ -325,6 +472,34 @@ body.green .sidebar { background: var(--panel-green); }
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.sidebar-search {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: hsla(0, 0%, 50%, 0.05);
+  color: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+}
+
+.no-results {
+  padding: 40px 20px;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 0.9rem;
 }
 
 .chapter-list {
@@ -383,9 +558,18 @@ body.green .sidebar { background: var(--panel-green); }
   transform: scale(1.1);
 }
 
-.theme-dot.light { background: #fff; border: 1px solid #ddd; }
-.theme-dot.green { background: #c7edcc; }
-.theme-dot.dark { background: #1a1a1a; }
+.theme-dot.light {
+  background: #fff;
+  border: 1px solid #ddd;
+}
+
+.theme-dot.green {
+  background: #c7edcc;
+}
+
+.theme-dot.dark {
+  background: #1a1a1a;
+}
 
 .progress-info {
   text-align: center;
@@ -412,9 +596,21 @@ body.green .sidebar { background: var(--panel-green); }
 }
 
 @media (max-width: 768px) {
-  .sidebar { width: 85%; }
-  .book-title { display: none; }
-  .controls-grid { flex-direction: column; gap: 15px; }
-  .reader-container { padding-top: 60px; }
+  .sidebar {
+    width: 85%;
+  }
+
+  .book-title {
+    display: none;
+  }
+
+  .controls-grid {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .reader-container {
+    padding-top: 60px;
+  }
 }
 </style>

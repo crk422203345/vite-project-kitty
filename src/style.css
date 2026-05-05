@@ -114,3 +114,70 @@ body.green {
   animation: fadeIn 0.4s ease forwards;
 }
 
+/* Progress Bar */
+.progress-bar-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: hsla(0, 0%, 50%, 0.1);
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px var(--primary);
+}
+
+.top-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.top-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Custom Scrollbar for Sidebar */
+.chapter-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chapter-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chapter-list::-webkit-scrollbar-thumb {
+  background: hsla(0, 0%, 50%, 0.2);
+  border-radius: 10px;
+}
+
+.chapter-list::-webkit-scrollbar-thumb:hover {
+  background: hsla(0, 0%, 50%, 0.3);
+}
+
+/* Improve Typography */
+.content-body {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.current-chapter-title {
+  position: relative;
+}
+
+.current-chapter-title::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 25%;
+  width: 50%;
+  height: 2px;
+  background: var(--primary);
+  opacity: 0.5;
+}
+
