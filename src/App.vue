@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 
 interface Chapter {
   title: string
@@ -109,9 +109,16 @@ const loadProgress = () => {
 const changeChapter = (index: number) => {
   if (index >= 0 && index < chapters.value.length) {
     currentChapterIndex.value = index
-    window.scrollTo({ top: 0, behavior: 'smooth' })
     saveProgress()
     isSidebarOpen.value = false
+    isControlsVisible.value = false
+    
+    // Scroll to top immediately
+    nextTick(() => {
+      window.scrollTo(0, 0)
+      document.body.scrollTop = 0
+      document.documentElement.scrollTop = 0
+    })
   }
 }
 
@@ -224,20 +231,25 @@ watch(fontSize, (newSize) => {
         <p>正在努力解析小说...</p>
       </div>
 
-      <div v-else-if="chapters.length > 0" class="fade-in">
-        <h2 class="current-chapter-title">{{ chapters[currentChapterIndex].title }}</h2>
-        <div class="content-body">{{ chapters[currentChapterIndex].content }}</div>
+      <!-- Content Grid for Silkier Transitions without flashing -->
+      <div class="content-grid">
+        <Transition name="silk-fade">
+          <div v-if="!isLoading && chapters.length > 0" :key="currentChapterIndex" class="chapter-wrapper">
+            <h2 class="current-chapter-title">{{ chapters[currentChapterIndex].title }}</h2>
+            <div class="content-body">{{ chapters[currentChapterIndex].content }}</div>
 
-        <div class="navigation-buttons">
-          <button class="btn" @click.stop="changeChapter(currentChapterIndex - 1)"
-            :disabled="currentChapterIndex === 0">上一章</button>
-          <button class="btn" @click.stop="changeChapter(currentChapterIndex + 1)"
-            :disabled="currentChapterIndex === chapters.length - 1">下一章</button>
-        </div>
-      </div>
-      <div v-else class="welcome-screen">
-        <h2>欢迎来到极简书阁</h2>
-        <p>请导入 TXT 小说开始阅读</p>
+            <div class="navigation-buttons">
+              <button class="btn" @click.stop="changeChapter(currentChapterIndex - 1)"
+                :disabled="currentChapterIndex === 0">上一章</button>
+              <button class="btn" @click.stop="changeChapter(currentChapterIndex + 1)"
+                :disabled="currentChapterIndex === chapters.length - 1">下一章</button>
+            </div>
+          </div>
+          <div v-else-if="!isLoading" class="welcome-screen">
+            <h2>欢迎来到极简书阁</h2>
+            <p>请导入 TXT 小说开始阅读</p>
+          </div>
+        </Transition>
       </div>
     </main>
 
@@ -272,6 +284,35 @@ watch(fontSize, (newSize) => {
 </template>
 
 <style scoped>
+/* Improved Silky Transition - Grid Based to prevent flashing */
+.content-grid {
+  display: grid;
+  grid-template-columns: 100%;
+}
+
+.chapter-wrapper {
+  grid-area: 1 / 1 / 2 / 2;
+  width: 100%;
+}
+
+.silk-fade-enter-active {
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+.silk-fade-leave-active {
+  transition: opacity 0.2s ease-in, transform 0.2s ease-in;
+}
+
+.silk-fade-enter-from {
+  opacity: 0;
+  transform: translateY(15px);
+}
+
+.silk-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-15px);
+}
+
 .side-nav {
   position: fixed;
   top: 0;
