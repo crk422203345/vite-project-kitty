@@ -184,7 +184,7 @@ watch(fontSize, (newSize) => {
     </div>
 
     <!-- Top Bar -->
-    <header :class="['top-bar glass', { visible: isControlsVisible }]">
+    <header :class="['top-bar glass', { visible: isControlsVisible }]" @click.stop>
       <div class="progress-bar-container">
         <div class="progress-bar" :style="{ width: readingProgressPercent + '%' }"></div>
       </div>
@@ -279,7 +279,9 @@ watch(fontSize, (newSize) => {
     </footer>
 
     <!-- Overlay -->
-    <div v-if="isSidebarOpen" class="overlay" @click="isSidebarOpen = false"></div>
+    <Transition name="fade">
+      <div v-if="isSidebarOpen || isControlsVisible" class="overlay" @click.stop="isSidebarOpen = false; isControlsVisible = false"></div>
+    </Transition>
   </div>
 </template>
 
@@ -311,6 +313,16 @@ watch(fontSize, (newSize) => {
 .silk-fade-leave-to {
   opacity: 0;
   transform: translateY(-15px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .side-nav {
@@ -383,7 +395,7 @@ watch(fontSize, (newSize) => {
   position: fixed;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 170;
   padding: 15px 25px;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -621,9 +633,10 @@ body.green .sidebar {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.15);
   z-index: 150;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .welcome-screen {
