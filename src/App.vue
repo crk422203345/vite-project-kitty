@@ -396,8 +396,9 @@ watch(fontSize, (newSize) => {
   left: 0;
   right: 0;
   z-index: 250;
-  padding-left: calc(20px + env(safe-area-inset-left));
-  padding-right: calc(20px + env(safe-area-inset-right));
+  padding: 20px 40px;
+  padding-left: calc(40px + env(safe-area-inset-left));
+  padding-right: calc(40px + env(safe-area-inset-right));
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform, opacity;
 }
@@ -405,17 +406,13 @@ watch(fontSize, (newSize) => {
 .top-bar {
   background: var(--panel-light);
   border-bottom: 1px solid var(--border);
-  border-bottom-left-radius: 20px;
-  border-bottom-right-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .bottom-bar {
   background: var(--panel-light);
   border-top: 1px solid var(--border);
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
 }
 
 body.dark .top-bar, body.dark .bottom-bar { 
