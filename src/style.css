@@ -2,15 +2,15 @@
   /* Color Palettes */
   --bg-light: hsl(0, 0%, 98%);
   --text-light: hsl(210, 20%, 20%);
-  --panel-light: hsla(0, 0%, 100%, 0.85);
+  --panel-light: hsla(0, 0%, 100%, 0.98);
 
   --bg-dark: hsl(220, 15%, 10%);
   --text-dark: hsl(220, 10%, 75%);
-  --panel-dark: hsla(220, 15%, 15%, 0.85);
+  --panel-dark: hsla(220, 15%, 15%, 0.98);
 
   --bg-green: hsl(120, 30%, 88%);
   --text-green: hsl(150, 40%, 15%);
-  --panel-green: hsla(120, 30%, 92%, 0.85);
+  --panel-green: hsla(120, 30%, 92%, 0.98);
 
   /* Functional Colors */
   --primary: hsl(210, 100%, 60%);

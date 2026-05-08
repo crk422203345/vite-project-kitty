@@ -114,11 +114,9 @@ const changeChapter = (index: number) => {
     isControlsVisible.value = false
     
     // Scroll to top immediately
-    nextTick(() => {
-      window.scrollTo(0, 0)
-      document.body.scrollTop = 0
-      document.documentElement.scrollTop = 0
-    })
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 100)
   }
 }
 
@@ -206,7 +204,7 @@ watch(fontSize, (newSize) => {
     <aside :class="['sidebar glass', { open: isSidebarOpen }]" @click.stop>
       <div class="sidebar-header">
         <h2>目录</h2>
-        <button class="btn" @click="isSidebarOpen = false">✕</button>
+        <button class="btn close-btn" @click="isSidebarOpen = false">✕</button>
       </div>
       <div class="sidebar-search">
         <input type="text" v-model="searchQuery" placeholder="搜索章节..." class="search-input">
@@ -233,7 +231,7 @@ watch(fontSize, (newSize) => {
 
       <!-- Content Grid for Silkier Transitions without flashing -->
       <div class="content-grid">
-        <Transition name="silk-fade">
+        <Transition name="silk-fade" mode="out-in">
           <div v-if="!isLoading && chapters.length > 0" :key="currentChapterIndex" class="chapter-wrapper">
             <h2 class="current-chapter-title">{{ chapters[currentChapterIndex].title }}</h2>
             <div class="content-body">{{ chapters[currentChapterIndex].content }}</div>
@@ -278,9 +276,9 @@ watch(fontSize, (newSize) => {
       </div>
     </footer>
 
-    <!-- Overlay -->
+    <!-- Overlay: Only for sidebar to prevent clutter when just viewing controls -->
     <Transition name="fade">
-      <div v-if="isSidebarOpen || isControlsVisible" class="overlay" @click.stop="isSidebarOpen = false; isControlsVisible = false"></div>
+      <div v-if="isSidebarOpen" class="overlay" @click.stop="isSidebarOpen = false"></div>
     </Transition>
   </div>
 </template>
@@ -293,8 +291,8 @@ watch(fontSize, (newSize) => {
 }
 
 .chapter-wrapper {
-  grid-area: 1 / 1 / 2 / 2;
   width: 100%;
+  will-change: opacity, transform;
 }
 
 .silk-fade-enter-active {
@@ -340,6 +338,7 @@ watch(fontSize, (newSize) => {
   background: hsla(0, 0%, 50%, 0.05);
   border: none;
   backdrop-filter: blur(8px);
+  user-select: none;
 }
 
 .side-nav.disabled {
@@ -388,6 +387,7 @@ watch(fontSize, (newSize) => {
 #reader-app {
   min-height: 100vh;
   position: relative;
+  overflow-x: hidden;
 }
 
 .top-bar,
@@ -395,14 +395,38 @@ watch(fontSize, (newSize) => {
   position: fixed;
   left: 0;
   right: 0;
-  z-index: 170;
-  padding: 15px 25px;
-  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 250;
+  padding-left: calc(20px + env(safe-area-inset-left));
+  padding-right: calc(20px + env(safe-area-inset-right));
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
 }
 
 .top-bar {
+  background: var(--panel-light);
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.bottom-bar {
+  background: var(--panel-light);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+}
+
+body.dark .top-bar, body.dark .bottom-bar { 
+  background: var(--panel-dark); 
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+body.green .top-bar, body.green .bottom-bar { background: var(--panel-green); }
+
+.top-bar {
   top: 0;
-  transform: translateY(-100%);
+  transform: translateY(-130%);
 }
 
 .top-bar.visible {
@@ -411,11 +435,16 @@ watch(fontSize, (newSize) => {
 
 .bottom-bar {
   bottom: 0;
-  transform: translateY(100%);
+  transform: translateY(130%);
 }
 
 .bottom-bar.visible {
   transform: translateY(0);
+}
+
+.bottom-bar {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-top: 20px;
 }
 
 .top-content {
@@ -427,13 +456,15 @@ watch(fontSize, (newSize) => {
 }
 
 .book-title {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  opacity: 0.8;
-  max-width: 50%;
+  letter-spacing: -0.02em;
+  opacity: 0.9;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .reader-container {
@@ -441,6 +472,7 @@ watch(fontSize, (newSize) => {
   margin: 0 auto;
   padding: 100px 20px;
   min-height: 100vh;
+  transition: font-size 0.2s ease; /* Smooth font size adjustment */
 }
 
 .loading-overlay {
@@ -499,12 +531,14 @@ watch(fontSize, (newSize) => {
   top: 0;
   bottom: 0;
   width: 320px;
-  z-index: 200;
+  z-index: 300;
   transform: translateX(-100%);
-  transition: transform 0.3s ease;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   background: var(--panel-light);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.1);
+  will-change: transform;
 }
 
 body.dark .sidebar {
@@ -520,7 +554,7 @@ body.green .sidebar {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: 24px 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -528,8 +562,22 @@ body.green .sidebar {
 }
 
 .sidebar-search {
-  padding: 10px 20px;
+  padding: 15px 20px;
   border-bottom: 1px solid var(--border);
+}
+
+.close-btn {
+  border: none !important;
+  background: transparent !important;
+  font-size: 1.2rem;
+  padding: 8px;
+  opacity: 0.6;
+  transform: none !important;
+}
+
+.close-btn:hover {
+  opacity: 1;
+  background: hsla(0, 0%, 50%, 0.1) !important;
 }
 
 .search-input {
@@ -562,7 +610,7 @@ body.green .sidebar {
 }
 
 .chapter-item {
-  padding: 12px 20px;
+  padding: 15px 25px;
   cursor: pointer;
   font-size: 0.95rem;
   transition: background 0.2s;
@@ -633,10 +681,10 @@ body.green .sidebar {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.15);
-  z-index: 150;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 290;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .welcome-screen {
@@ -658,13 +706,59 @@ body.green .sidebar {
     display: none;
   }
 
-  .controls-grid {
-    flex-direction: column;
-    gap: 15px;
+  .reader-container {
+    padding-top: 100px;
+    padding-bottom: 140px;
   }
 
-  .reader-container {
-    padding-top: 60px;
+  .top-bar, .bottom-bar {
+    margin: 0;
+    width: 100%;
+    left: 0;
+    right: 0;
+    border: none;
+    border-radius: 0;
+    padding: 20px 25px;
+  }
+
+  .top-bar { 
+    top: 0; 
+    border-bottom: 1px solid var(--border);
+    padding-top: calc(20px + env(safe-area-inset-top));
+  }
+  
+  .bottom-bar { 
+    bottom: 0; 
+    border-top: 1px solid var(--border);
+    padding-bottom: calc(25px + env(safe-area-inset-bottom));
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    padding: 10px 0;
+  }
+
+  .control-item:last-child {
+    grid-column: span 2; /* Full width for full-screen button */
+  }
+
+  .control-item {
+    background: hsla(0, 0%, 50%, 0.05);
+    padding: 8px;
+    border-radius: 8px;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+
+  .theme-dots {
+    gap: 8px;
+  }
+
+  .theme-dot {
+    width: 20px;
+    height: 20px;
   }
 }
 </style>
